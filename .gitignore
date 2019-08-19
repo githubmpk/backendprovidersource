@@ -1,0 +1,38 @@
+/.gradle/
+/.idea/
+/build/
+/gradle/
+/log/
+!gradle/wrapper/gradle-wrapper.jar
+/src/main/frontend/node_modules/
+/src/main/resources/static/
+/src/main/frontend/package-lock.json
+
+### STS ###
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
+
+### IntelliJ IDEA ###
+.idea
+*.iws
+*.iml
+*.ipr
+/out/
+
+### NetBeans ###
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+
+###local configuration file###
+/src/main/resources/application-local.properties
+
+###Log folder###
+./log

@@ -1,0 +1,151 @@
+buildscript {
+    ext {
+        springBootVersion = '2.1.0.RELEASE'
+    }
+    repositories {
+        mavenCentral()
+    }
+    dependencies {
+        classpath("org.springframework.boot:spring-boot-gradle-plugin:${springBootVersion}")
+        classpath('org.owasp:dependency-check-gradle:3.1.2')
+        classpath('com.microsoft.sqlserver:mssql-jdbc:6.1.0.jre8')
+    }
+}
+
+plugins {
+    id "org.flywaydb.flyway" version "5.2.4"
+    id "org.sonarqube" version "2.7"
+    id 'com.gorylenko.gradle-git-properties' version '1.4.17'
+    id "com.energizedwork.webdriver-binaries" version "1.4"
+    id "com.energizedwork.idea-base" version "1.4"
+    id "com.palantir.docker" version "0.22.1"
+}
+
+apply plugin: 'java'
+apply plugin: 'eclipse'
+apply plugin: 'groovy'
+apply plugin: 'org.springframework.boot'
+apply plugin: 'io.spring.dependency-management'
+apply plugin: 'org.owasp.dependencycheck'
+
+group = 'com.pathcare.pathprovider'
+version = '0.0.1-SNAPSHOT'
+sourceCompatibility = 1.8
+
+repositories {
+    mavenCentral()
+}
+
+ext {
+    set('springCloudVersion', "Greenwich.SR2")
+}
+
+//TODO Fix the setting for functional testing
+sourceSets {
+    functionalTest {
+        groovy {
+            srcDir 'src/functionalTest/groovy'
+        }
+    }
+}
+
+dependencies {
+    implementation('org.springframework.boot:spring-boot-starter-actuator')
+    implementation 'org.springframework.boot:spring-boot-starter-data-rest'
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation 'org.springframework.cloud:spring-cloud-starter-consul-discovery'
+    implementation('org.springframework.boot:spring-boot-starter-data-jpa')
+    implementation('org.springframework.boot:spring-boot-starter-jersey')
+    implementation("org.springframework.boot:spring-boot-devtools")
+    implementation 'org.springframework.boot:spring-boot-starter-security'
+    implementation 'org.keycloak:keycloak-spring-boot-2-starter:4.0.0.Final'
+    implementation('org.flywaydb:flyway-core')
+    implementation('com.fasterxml.jackson.core:jackson-core:2.9.6')
+    implementation('com.fasterxml.jackson.core:jackson-annotations:2.9.6')
+    implementation('com.fasterxml.jackson.core:jackson-databind:2.9.6')
+    implementation('joda-time:joda-time:2.9')
+    implementation 'org.springframework.boot:spring-boot-starter'
+    implementation 'org.springframework.cloud:spring-cloud-starter-consul-config'
+    testCompile 'org.springframework.boot:spring-boot-starter-test:1.5.6.RELEASE'
+
+    runtimeOnly('org.springframework.boot:spring-boot-devtools')
+    runtimeOnly('com.microsoft.sqlserver:mssql-jdbc')
+
+    testImplementation('org.springframework.boot:spring-boot-starter-test')
+    testImplementation('org.springframework.security:spring-security-test')
+
+
+    functionalTestCompile "org.gebish:geb-junit4:2.2"
+    functionalTestCompile "org.gebish:geb-spock:2.2"
+    functionalTestCompile("org.spockframework:spock-core:1.1-groovy-2.4") {
+        exclude group: "org.codehaus.groovy"
+    }
+    functionalTestCompile "org.codehaus.groovy:groovy-all:2.4.12"
+    functionalTestCompile "org.seleniumhq.selenium:selenium-chrome-driver:3.11.0"
+    functionalTestCompile "org.seleniumhq.selenium:selenium-api:3.11.0"
+    functionalTestCompile "org.seleniumhq.selenium:selenium-remote-driver:3.11.0"
+    functionalTestCompile "org.seleniumhq.selenium:selenium-firefox-driver:3.11.0"
+
+}
+
+webdriverBinaries {
+    chromedriver '2.38'
+    geckodriver '0.19.0'
+}
+//
+///** PLEASE DO NOT CHANGE THE FLYWAY TASK. IF YOU DO YOU WILL GET FIRED. THIS IS NOT A JOKE AS YOU WILL DELETE THE PRODUCTION DATABASE
+// * THIS IS ONLY FOR DEVELOP DATABASE FOR AUTOMATED TESTING.*/
+flyway {
+    locations = ['filesystem:./src/main/resources/db/migration', 'filesystem:./src/functionalTest/resources/db/migration']
+    url = 'jdbc:sqlserver://MSSQL:1433;databaseName=ResultsPortal'
+    user = 'rpUserDev'
+    password = 'Friday30'
+
+}
+
+ext {
+    gebVersion = "2.1"
+    seleniumVersion = "3.11.0"
+    drivers = ["chromeHeadless"] //,"chrome", "chromeHeadless", "firefox",
+}
+
+drivers.each { driver ->
+    task "${driver}Test"(type: Test) {
+        group JavaBasePlugin.VERIFICATION_GROUP
+
+        testClassesDirs = sourceSets.functionalTest.output.classesDirs
+        classpath = sourceSets.functionalTest.runtimeClasspath
+        outputs.upToDateWhen { false }  // Always run tests
+
+        systemProperty "webdriver.chrome.driver", "/usr/bin/chromedriver"
+        systemProperty "geb.build.reportsDir", reporting.file("geb/$name")
+        systemProperty "geb.env", driver
+    }
+}
+
+task integrationTests(type: Test) {
+    dependsOn drivers.collect { tasks["${it}Test"] }
+    systemProperties "geb.build.reportsDir": "$reportsDir/geb"
+    //enabled = false
+}
+
+
+dependencyCheck {
+    failOnError = true
+    suppressionFiles = ['./suppress.xml']
+    failBuildOnCVSS = 7
+}
+
+docker {
+    name "pathproviderv3"
+    dependsOn build
+    files  bootJar.archivePath
+    copySpec.into("build/libs")
+    dockerfile file("Dockerfile")
+}
+
+dependencyManagement {
+    imports {
+        mavenBom "org.springframework.cloud:spring-cloud-dependencies:${springCloudVersion}"
+    }
+}
